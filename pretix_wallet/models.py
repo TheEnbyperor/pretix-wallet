@@ -4,14 +4,31 @@ from pretix.base.models import LoggedModel
 from django.conf import settings
 from django.db import models
 import decimal
-import secrets
-import base64
+import random
+import string
 
-def gen_wallet_secret(length=16):
+IIN = "6333"
+PAN_LEN = 16
+
+def luhn_checksum(n: str):
+    m = [0, 2, 4, 6, 8, 1, 3, 5, 7, 9]
+    digits = list(n)
+    odd_digits = [*map(int, digits[1:][::2])]
+    even_digits = [m[int(d)] for d in digits[0:][::2]]
+    x = sum(odd_digits) + sum(even_digits)
+
+    x = (10 - x % 10)
+    return 0 if x == 10 else x
+
+def gen_wallet_pan():
     while True:
-        code = secrets.token_bytes(length)
-        if not Wallet.objects.filter(secret=code).exists():
-            return code
+        random_len = PAN_LEN - 1 - len(IIN)
+        ian = "".join(random.choices(string.digits, k=random_len))
+        pan = f"{IIN}{ian}"
+        pan = f"{pan}{luhn_checksum(pan)}"
+        if not Wallet.objects.filter(pan=pan).exists():
+            return pan
+
 
 class Wallet(LoggedModel):
     issuer = models.ForeignKey(
@@ -32,25 +49,24 @@ class Wallet(LoggedModel):
         on_delete=models.SET_NULL
     )
     created_at = models.DateTimeField(auto_now_add=True)
-    secret = models.BinaryField(max_length=64)
+    pan = models.CharField(max_length=19, validators=[validators.RegexValidator(regex=r"^[0-9]{10-19}$")])
     CURRENCY_CHOICES = [(c.alpha_3, c.alpha_3 + " - " + c.name) for c in settings.CURRENCIES]
     currency = models.CharField(max_length=10, choices=CURRENCY_CHOICES, validators=[
         validators.MinLengthValidator(3),
     ])
 
     def save(self, *args, **kwargs):
-        if not self.secret:
-            self.secret = gen_wallet_secret()
+        if not self.pan:
+            self.pan = gen_wallet_pan()
 
         super().save(*args, **kwargs)
 
     @property
-    def display_id(self):
-        return base64.b32hexencode(self.secret).decode().replace("=", "")
-
-    @property
-    def public_id(self):
-        return self.display_id[:6]
+    def public_pan(self):
+        redacted_len = len(self.pan) - 8
+        iin = self.pan[:4]
+        last4 = self.pan[-4:]
+        return f"{iin}{'*' * redacted_len}{last4}"
 
     @property
     def balance(self):

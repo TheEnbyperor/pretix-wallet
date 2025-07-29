@@ -9,7 +9,7 @@ ROOT = pathlib.Path(__file__).parent
 BARCODE_CONTENT = asn1tools.compile_files([ROOT / "asn1" / "pretixWallet.asn"], codec="uper")
 
 class WalletBarcodeElement(UICBarcodeElement):
-    def __init__(self, wallet_id: bytes, issuer: str):
+    def __init__(self, wallet_id: str, issuer: str):
         self.wallet_id = wallet_id
         self.issuer = issuer
 
@@ -23,7 +23,7 @@ class WalletBarcodeElement(UICBarcodeElement):
 
     def record_content(self) -> bytes:
         return BARCODE_CONTENT.encode("PretixWallet", {
-            "uniqueId": self.wallet_id,
+            "pan": self.wallet_id,
             "issuer": self.issuer,
         })
 
@@ -48,6 +48,6 @@ class WalletBarcodeElementGenerator(BaseBarcodeElementGenerator):
             return None
 
         return WalletBarcodeElement(
-            wallet_id=wallet.secret,
+            wallet_id=wallet.pan,
             issuer=wallet.issuer.slug
         )

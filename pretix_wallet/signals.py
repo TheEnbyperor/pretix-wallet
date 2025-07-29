@@ -11,7 +11,7 @@ from pretix.control.signals import nav_organizer, item_forms
 from pretix.presale.signals import order_info_top
 from pretix_uic_barcode.signals import register_barcode_element_generators
 
-from . import payment, models, elements
+from . import payment, models, elements, forms
 
 
 @receiver(register_payment_providers, dispatch_uid="payment_wallet")
@@ -83,7 +83,7 @@ def item_issue_balance(sender, item, request, **kwargs):
         inst = models.WalletItem.objects.get(item=item)
     except  models.WalletItem.DoesNotExist:
         inst = models.WalletItem(item=item)
-    return WalletItemForm(
+    return forms.WalletItemForm(
         instance=inst,
         data=(request.POST if request.method == "POST" else None),
         prefix="wallet"
@@ -111,7 +111,7 @@ def order_issue_balance(sender, order, **kwargs):
                         wallet = order.customer.wallet
                     else:
                         wallet = models.Wallet.objects.create(
-                            issuer=sender,
+                            issuer=sender.organizer,
                             customer=order.customer,
                             currency=sender.settings.wallet_default_currency,
                         )
@@ -121,7 +121,7 @@ def order_issue_balance(sender, order, **kwargs):
                         wallet = order.wallet
                     else:
                         wallet = models.Wallet.objects.create(
-                            issuer=sender,
+                            issuer=sender.organizer,
                             order_position=p,
                             currency=sender.settings.wallet_default_currency,
                         )
