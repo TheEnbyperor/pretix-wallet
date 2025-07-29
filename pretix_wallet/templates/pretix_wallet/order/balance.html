@@ -1,0 +1,54 @@
+{% load eventurl %}
+{% load money %}
+{% for wallet in wallets %}
+    <div class="panel panel-primary">
+        <div class="panel-heading">
+            <h3 class="panel-title">Wallet <strong>#{{ wallet.public_id }}</strong></h3>
+        </div>
+        <div class="panel-body">
+            <p class="lead">
+                Balance: <strong>{{ wallet.balance|money:wallet.currency }}</strong>
+            </p>
+            <p>
+                <a data-toggle="collapse" href="#transactions_{{ wallet.public_id }}"
+                   aria-expanded="false" aria-controls="transactions_{{ wallet.public_id }}">
+                    Transactions <span class="fa fa-arrow-down" aria-hidden="true"></span>
+                </a>
+            </p>
+            <div class="collapse" id="transactions_{{ wallet.public_id }}">
+                <div class="table-responsive">
+                    <table class="table table-condensed table-hover">
+                        <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Description</th>
+                            <th></th>
+                            <th>Amount</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% if wallet.transactions.count %}
+                            {% for transaction in wallet.transactions.all %}
+                                <tr>
+                                    <td>{{ transaction.timestamp|date:"SHORT_DATETIME_FORMAT" }}</td>
+                                    <td>{{ transaction.descriptor }}</td>
+                                    <td>
+                                        {% if transaction.order_position %}
+                                            <a href="{% eventurl event "presale:event.order" secret=transaction.order_position.order.secret order=transaction.order_position.order.code %}">View order</a>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ transaction.value|money:wallet.currency }}</td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="4">No transactions yet.</td>
+                            </tr>
+                        {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endfor %}

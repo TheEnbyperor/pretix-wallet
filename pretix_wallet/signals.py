@@ -1,0 +1,138 @@
+import decimal
+
+from django.db import transaction
+from django.dispatch import receiver
+from django.template.loader import get_template
+from django.urls import resolve, reverse
+from pretix.base.models.orders import Order
+from pretix.base.services import tickets
+from pretix.base.signals import register_payment_providers, customer_created, order_paid, order_changed
+from pretix.control.signals import nav_organizer, item_forms
+from pretix.presale.signals import order_info_top
+from pretix_uic_barcode.signals import register_barcode_element_generators
+
+from . import payment, models, elements
+
+
+@receiver(register_payment_providers, dispatch_uid="payment_wallet")
+def register_payment_provider(sender, **kwargs):
+    return payment.Wallet
+
+
+@receiver(nav_organizer, dispatch_uid="wallet_organav")
+def control_nav_orga_import(sender, request=None, **kwargs):
+    url = resolve(request.path_info)
+    if not request.user.has_organizer_permission(request.organizer, "can_change_orders", request=request):
+        return []
+    if not request.organizer.events.filter(plugins__icontains="pretix_wallet"):
+        return []
+    return [
+        {
+            'label': "Wallets",
+            'url': reverse('plugins:pretix_wallet:wallets', kwargs={
+                'organizer': request.organizer.slug,
+            }),
+            'icon': 'university',
+            'children': [{
+                'label': "Wallets",
+                'url': reverse('plugins:pretix_wallet:wallets', kwargs={
+                    'organizer': request.organizer.slug
+                }),
+                'active': url.url_name == "wallets",
+            }, {
+                'label': "Settings",
+                'url': reverse('plugins:pretix_wallet:settings', kwargs={
+                    'organizer': request.organizer.slug
+                }),
+                'active': url.url_name == "settings",
+            }]
+        }
+    ]
+
+
+@receiver(customer_created, dispatch_uid="wallet_customer_created")
+def customer_created(sender, customer, **kwargs):
+    if sender.settings.wallet_create_for_customers and not hasattr(customer, "wallet"):
+        models.Wallet.objects.create(
+            issuer=sender,
+            customer=customer,
+            currency=sender.settings.wallet_default_currency,
+        )
+
+
+@receiver(order_info_top, dispatch_uid="wallet_show_balance")
+def order_info_balance(sender, request, order, **kwargs):
+    template = get_template("pretix_wallet/order/balance.html")
+
+    wallets = []
+    if hasattr(order.customer, "wallet"):
+        wallets.append(order.customer.wallet)
+
+    ctx = {
+        'order': order,
+        'request': request,
+        'event': sender,
+        'wallets': wallets,
+    }
+    return template.render(ctx, request=request)
+
+
+@receiver(item_forms, dispatch_uid="wallet_item_issue_balance")
+def item_issue_balance(sender, item, request, **kwargs):
+    try:
+        inst = models.WalletItem.objects.get(item=item)
+    except  models.WalletItem.DoesNotExist:
+        inst = models.WalletItem(item=item)
+    return WalletItemForm(
+        instance=inst,
+        data=(request.POST if request.method == "POST" else None),
+        prefix="wallet"
+    )
+
+
+@receiver(order_paid, dispatch_uid="wallet_order_paid_issue_balance")
+@receiver(order_changed, dispatch_uid="wallet_order_changed_issue_balance")
+@transaction.atomic()
+def order_issue_balance(sender, order, **kwargs):
+    if order.status != Order.STATUS_PAID:
+        return
+    any_wallets = False
+    for p in order.positions.all():
+        if hasattr(p.item, "wallet") and p.item.wallet.issue_wallet_balance:
+            issued = decimal.Decimal('0.00')
+            for wt in p.wallet_transactions.all().distinct():
+                issued += wt.value
+            tbi = p.price - issued
+            if tbi > 0:
+                any_wallets = True
+
+                if order.customer:
+                    if hasattr(order.customer, "wallet"):
+                        wallet = order.customer.wallet
+                    else:
+                        wallet = models.Wallet.objects.create(
+                            issuer=sender,
+                            customer=order.customer,
+                            currency=sender.settings.wallet_default_currency,
+                        )
+                        wallet.save()
+                else:
+                    if hasattr(order, "wallet"):
+                        wallet = order.wallet
+                    else:
+                        wallet = models.Wallet.objects.create(
+                            issuer=sender,
+                            order_position=p,
+                            currency=sender.settings.wallet_default_currency,
+                        )
+                        wallet.save()
+
+                wallet.transactions.create(value=tbi, order_position=p, descriptor=f"Order #{order.full_code}")
+
+    if any_wallets:
+        tickets.invalidate_cache.apply_async(kwargs={'event': sender.pk, 'order': order.pk})
+
+
+@receiver(register_barcode_element_generators, dispatch_uid="wallet_barcode_element_generator")
+def element_generator(sender, **kwargs):
+    return [elements.WalletBarcodeElementGenerator]

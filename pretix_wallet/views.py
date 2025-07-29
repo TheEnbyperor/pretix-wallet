@@ -1,0 +1,78 @@
+from django.contrib import messages
+from django.db import transaction
+from django.db.models import OuterRef, Sum, Max, Subquery
+from django.db.models.functions import Coalesce
+from django.shortcuts import redirect
+from django.urls import reverse
+from django.utils.functional import cached_property
+from pretix.control.views.organizer import OrganizerDetailViewMixin, Organizer
+from pretix.control.permissions import OrganizerPermissionRequiredMixin
+from django.views.generic import ListView, FormView
+from . import models, forms
+import decimal
+
+
+class SettingsView(OrganizerDetailViewMixin, OrganizerPermissionRequiredMixin, FormView):
+    model = Organizer
+    form_class = forms.WalletSettingsForm
+    template_name = 'pretix_wallet/organizers/settings.html'
+    permission = 'can_change_organizer_settings'
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['obj'] = self.request.organizer
+        return kwargs
+
+    def get_success_url(self):
+        return reverse('plugins:pretix_wallet:settings', kwargs={
+            'organizer': self.request.organizer.slug,
+        })
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        form = self.get_form()
+        if form.is_valid():
+            form.save()
+            if form.has_changed():
+                self.request.organizer.log_action(
+                    'pretix.organizer.settings', user=self.request.user, data={
+                        k: form.cleaned_data.get(k) for k in form.changed_data
+                    }
+                )
+                messages.success(self.request, "Your changes have been saved.")
+            return redirect(self.get_success_url())
+        else:
+            messages.error(self.request, "We could not save your changes. See below for details.")
+            return self.get(request)
+
+
+class WalletListView(OrganizerDetailViewMixin, OrganizerPermissionRequiredMixin, ListView):
+    model = models.Wallet
+    template_name = 'pretix_wallet/organizers/wallets.html'
+    permission = 'can_change_orders'
+    context_object_name = 'wallets'
+    paginate_by = 50
+
+    def get_queryset(self):
+        s = models.WalletTransaction.objects.filter(
+            wallet=OuterRef('pk')
+        ).order_by().values('wallet').annotate(s=Sum('value')).values('s')
+        s_last_tx = models.WalletTransaction.objects.filter(
+            wallet=OuterRef('pk')
+        ).order_by().values('wallet').annotate(m=Max('timestamp')).values('m')
+        qs = self.request.organizer.wallets.annotate(
+            cached_balance=Coalesce(Subquery(s), decimal.Decimal('0.00')),
+            last_tx=Subquery(s_last_tx),
+        ).order_by('-created_at')
+        if self.filter_form.is_valid():
+            qs = self.filter_form.filter_qs(qs)
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['filter_form'] = self.filter_form
+        return ctx
+
+    @cached_property
+    def filter_form(self):
+        return forms.WalletFilterForm(data=self.request.GET, request=self.request)
