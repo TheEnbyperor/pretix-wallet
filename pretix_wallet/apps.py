@@ -25,4 +25,7 @@ class PluginApp(PluginConfig):
         navigation_links = []
 
     def ready(self):
+        from django.conf import settings
+        settings.MIDDLEWARE.append("pretix_wallet.middleware.CorsMiddleware")
+
         from . import signals  # NOQA
