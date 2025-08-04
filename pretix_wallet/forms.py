@@ -17,18 +17,33 @@ class WalletItemForm(forms.ModelForm):
 
 class WalletSettingsForm(SettingsForm):
     wallet_create_for_customers = forms.BooleanField(
-        label="Create wallets for all customers",
+        label="Create wallet on customer account creation - i.e. before an order is placed",
         required=False
     )
     wallet_default_currency = forms.ChoiceField(
         label="Default currency",
         choices=[(c.alpha_3, c.alpha_3 + " - " + c.name) for c in settings.CURRENCIES],
     )
+    wallet_iin = forms.CharField(
+        max_length=18,
+        label="Issuer Identification Number"
+    )
+    wallet_pan_length = forms.IntegerField(
+        label="PAN length",
+        min_value=10,
+        max_value=19,
+        initial=16,
+    )
 
     def clean(self):
         if self.cleaned_data.get("wallet_create_for_customers") and not self.cleaned_data.get("wallet_default_currency"):
             raise ValidationError({
                 "wallet_default_currency": "Default currency must be specified",
+            })
+
+        if self.cleaned_data.get("wallet_pan_length", 16) - len(self.cleaned_data.get("wallet_iin", "")) < 2:
+            raise ValidationError({
+                "wallet_iin": "IIN is too long for the chosen PAN length",
             })
 
 

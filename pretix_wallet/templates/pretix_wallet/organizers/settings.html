@@ -16,6 +16,11 @@
         {% bootstrap_field form.wallet_create_for_customers layout="control" %}
         {% bootstrap_field form.wallet_default_currency layout="control" %}
     </fieldset>
+    <fieldset>
+        <legend>{% trans "PANs" %}</legend>
+        {% bootstrap_field form.wallet_iin layout="control" %}
+        {% bootstrap_field form.wallet_pan_length layout="control" %}
+    </fieldset>
     <div class="form-group submit-group">
         <button type="submit" class="btn btn-primary btn-save">
             {% trans "Save" %}

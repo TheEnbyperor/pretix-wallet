@@ -7,9 +7,6 @@ import decimal
 import random
 import string
 
-IIN = "6333"
-PAN_LEN = 16
-
 def luhn_checksum(n: str):
     m = [0, 2, 4, 6, 8, 1, 3, 5, 7, 9]
     digits = list(n)
@@ -20,11 +17,13 @@ def luhn_checksum(n: str):
     x = (10 - x % 10)
     return 0 if x == 10 else x
 
-def gen_wallet_pan():
+def gen_wallet_pan(issuer):
+    pan_len = issuer.settings.get("wallet_pan_length", 16)
+    iin = issuer.settings.get("wallet_iin", "")
     while True:
-        random_len = PAN_LEN - 1 - len(IIN)
+        random_len = pan_len - 1 - len(iin)
         ian = "".join(random.choices(string.digits, k=random_len))
-        pan = f"{IIN}{ian}"
+        pan = f"{iin}{ian}"
         pan = f"{pan}{luhn_checksum(pan)}"
         if not Wallet.objects.filter(pan=pan).exists():
             return pan
@@ -49,7 +48,7 @@ class Wallet(LoggedModel):
         on_delete=models.SET_NULL
     )
     created_at = models.DateTimeField(auto_now_add=True)
-    pan = models.CharField(max_length=19, validators=[validators.RegexValidator(regex=r"^[0-9]{10-19}$")])
+    pan = models.CharField(max_length=19, validators=[validators.RegexValidator(regex=r"^[0-9]{10-19}$")], db_index=True)
     CURRENCY_CHOICES = [(c.alpha_3, c.alpha_3 + " - " + c.name) for c in settings.CURRENCIES]
     currency = models.CharField(max_length=10, choices=CURRENCY_CHOICES, validators=[
         validators.MinLengthValidator(3),
@@ -57,7 +56,7 @@ class Wallet(LoggedModel):
 
     def save(self, *args, **kwargs):
         if not self.pan:
-            self.pan = gen_wallet_pan()
+            self.pan = gen_wallet_pan(self.issuer)
 
         super().save(*args, **kwargs)
 
