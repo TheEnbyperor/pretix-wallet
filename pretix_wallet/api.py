@@ -1,8 +1,13 @@
+from django.db import transaction
 from django.http import Http404
 from i18nfield.rest_framework import I18nAwareModelSerializer
-from rest_framework import viewsets, serializers
-
+from pretix.helpers import OF_SELF
+from rest_framework import viewsets, serializers, status
+from rest_framework.decorators import action
 from rest_framework.exceptions import MethodNotAllowed
+import decimal
+
+from rest_framework.response import Response
 
 from . import models
 
@@ -14,7 +19,8 @@ class WalletSerializer(I18nAwareModelSerializer):
 
     class Meta:
         model = models.Wallet
-        fields = ('id', 'issuer', 'balance', 'customer', 'created_at', 'pan', 'currency')
+        fields = ('id', 'issuer', 'balance', 'customer', 'created_at', 'pan',
+                  'public_pan', 'currency')
 
 
 class WalletViewSet(viewsets.ReadOnlyModelViewSet):
@@ -38,3 +44,21 @@ class WalletViewSet(viewsets.ReadOnlyModelViewSet):
 
     def perform_destroy(self, instance):
         raise MethodNotAllowed("Wallets cannot be deleted.")
+
+    @action(detail=True, methods=["POST"])
+    @transaction.atomic
+    def charge(self, request, **kwarg):
+        wallet = models.Wallet.objects.select_for_update(of=OF_SELF).get(pk=self.get_object().pk)
+        amount = serializers.DecimalField(max_digits=13, decimal_places=2).to_internal_value(request.data.get('amount'))
+        descriptor = serializers.CharField(allow_blank=True, allow_null=True).to_internal_value(request.data.get('descriptor', ''))
+        data = serializers.JSONField(required=False, allow_null=True).to_internal_value(request.data.get('data', {}))
+        if wallet.balance - amount < decimal.Decimal('0.00'):
+            return Response({
+                "amount": ["Insufficient balance"],
+            }, status=status.HTTP_402_PAYMENT_REQUIRED)
+        wallet.transactions.create(
+            value=-amount,
+            descriptor=descriptor or "Charge",
+            data=data,
+        )
+        return Response(WalletSerializer(self.get_object(), context=self.get_serializer_context()).data, status=status.HTTP_200_OK)

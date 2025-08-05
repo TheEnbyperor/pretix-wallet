@@ -108,6 +108,9 @@ class WalletTransaction(models.Model):
     descriptor = models.TextField(blank=True, null=False, default="")
     data = models.JSONField(default=dict)
 
+    class Meta:
+        ordering = ('-timestamp',)
+
 
 class WalletItem(models.Model):
     item = models.OneToOneField('pretixbase.Item', on_delete=models.CASCADE, related_name="wallet")
