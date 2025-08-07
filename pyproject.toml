@@ -13,7 +13,7 @@ maintainers = [
 ]
 
 dependencies = [
-    "pretix-uic-barcode",
+    "pretix-uic-barcode>=1.3.0",
     "asn1tools",
 ]
 
