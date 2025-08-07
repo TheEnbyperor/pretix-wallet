@@ -1,3 +1,4 @@
+import decimal
 from django.db import transaction
 from django.http import Http404
 from i18nfield.rest_framework import I18nAwareModelSerializer
@@ -5,11 +6,8 @@ from pretix.helpers import OF_SELF
 from rest_framework import viewsets, serializers, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import MethodNotAllowed
-import decimal
-
 from rest_framework.response import Response
-
-from . import models
+from . import models, signals
 
 
 class WalletSerializer(I18nAwareModelSerializer):
@@ -61,4 +59,5 @@ class WalletViewSet(viewsets.ReadOnlyModelViewSet):
             descriptor=descriptor or "Charge",
             data=data,
         )
+        signals.update_ticket_output.apply_async(kwargs={"wallet_pk": wallet.pk})
         return Response(WalletSerializer(self.get_object(), context=self.get_serializer_context()).data, status=status.HTTP_200_OK)

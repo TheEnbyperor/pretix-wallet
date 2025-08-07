@@ -9,7 +9,9 @@ from pretix.base.services import tickets
 from pretix.base.signals import register_payment_providers, customer_created, order_paid, order_changed
 from pretix.control.signals import nav_organizer, item_forms
 from pretix.presale.signals import order_info_top
-from pretix_uic_barcode.signals import register_barcode_element_generators
+from pretix.celery_app import app
+from pretix_uic_barcode.signals import register_barcode_element_generators, generate_google_wallet_module, generate_apple_wallet_module
+from pretix_uic_barcode import ticket_output
 
 from . import payment, models, elements, forms
 
@@ -128,6 +130,7 @@ def order_issue_balance(sender, order, **kwargs):
                         wallet.save()
 
                 wallet.transactions.create(value=tbi, order_position=p, descriptor=f"Order #{order.full_code}")
+                update_ticket_output.apply_async(kwargs={"wallet": wallet})
 
     if any_wallets:
         tickets.invalidate_cache.apply_async(kwargs={'event': sender.pk, 'order': order.pk})
@@ -136,3 +139,25 @@ def order_issue_balance(sender, order, **kwargs):
 @receiver(register_barcode_element_generators, dispatch_uid="wallet_barcode_element_generator")
 def element_generator(sender, **kwargs):
     return [elements.WalletBarcodeElementGenerator]
+
+
+@receiver(generate_google_wallet_module, dispatch_uid="wallet_google_module_generator")
+def google_module_generator(sender, **kwargs):
+    return [elements.generate_google_wallet_module]
+
+
+@receiver(generate_apple_wallet_module, dispatch_uid="wallet_apple_module_generator")
+def apple_module_generator(sender, **kwargs):
+    return [elements.generate_apple_wallet_module]
+
+
+@app.task(acks_late=True)
+def update_ticket_output(wallet_pk):
+    wallet = models.Wallet.objects.get(pk=wallet_pk)
+    if wallet.order_position:
+        ticket_output.update_ticket_output.apply_async(kwargs={"position_pk": wallet.order_position.pk})
+    
+    if wallet.customer:
+        for order in wallet.customer.orders.all():
+            ticket_output.update_ticket_output_all.apply_async(kwargs={"order_pk": order.pk})
+        

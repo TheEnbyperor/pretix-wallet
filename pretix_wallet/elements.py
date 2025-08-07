@@ -2,7 +2,9 @@ import typing
 import asn1tools
 import pathlib
 from pretix_uic_barcode.elements import UICBarcodeElement, BaseBarcodeElementGenerator
+from pretix.base.templatetags.money import money_filter
 from pretix.base.models import OrderPosition, Order
+from pretix.multidomain.urlreverse import build_absolute_uri
 from . import models
 
 ROOT = pathlib.Path(__file__).parent
@@ -27,23 +29,22 @@ class WalletBarcodeElement(UICBarcodeElement):
             "issuer": self.issuer,
         })
 
+def find_wallet(order_position: OrderPosition, order: Order) -> typing.Optional[models.Wallet]:
+    if hasattr(order_position, "wallet"):
+        return order_position.wallet
+    elif hasattr(order.customer, "wallet"):
+        return order.customer.wallet
+    else:
+        qs = models.Wallet.objects.filter(order_position__order=order)
+        if qs.count() == 1:
+            return qs.first()
+
+    return None
 
 class WalletBarcodeElementGenerator(BaseBarcodeElementGenerator):
     @staticmethod
-    def generate_element(
-            order_position: OrderPosition,
-            order: Order,
-    ) -> typing.Optional[WalletBarcodeElement]:
-        wallet = None
-        if hasattr(order_position, "wallet"):
-            wallet = order_position.wallet
-        elif hasattr(order.customer, "wallet"):
-            wallet = order.customer.wallet
-        else:
-            qs = models.Wallet.objects.filter(order_position__order=order)
-            if qs.count() == 1:
-                wallet = qs.first()
-
+    def generate_element(order_position: OrderPosition, order: Order) -> typing.Optional[WalletBarcodeElement]:
+        wallet = find_wallet(order_position, order)
         if not wallet:
             return None
 
@@ -51,3 +52,45 @@ class WalletBarcodeElementGenerator(BaseBarcodeElementGenerator):
             wallet_id=wallet.pan,
             issuer=wallet.issuer.slug
         )
+
+
+def generate_google_wallet_module(order_position: OrderPosition, order: Order):
+    wallet = find_wallet(order_position, order)
+    if not wallet:
+        return []
+
+    return [("valueAddedModule", {
+        "header": {
+            "defaultValue": {
+                "language": "en",
+                "value": f"Wallet {wallet.public_pan}",
+            }
+        },
+        "body": {
+            "defaultValue": {
+                "language": "en",
+                "value": f"Balance: {money_filter(wallet.balance, wallet.currency)}",
+            }
+        },
+        "uri": build_absolute_uri(order.event, "presale:event.order", {
+            "order": order.pk, "secret": order.secret
+        }),
+    })]
+
+
+def generate_apple_wallet_module(order_position: OrderPosition, order: Order):
+    wallet = find_wallet(order_position, order)
+    if not wallet:
+        return []
+
+    return [("backField", {
+        "key": "wallet-number",
+        "label": "Wallet number",
+        "value": wallet.public_pan,
+    }), ("backField", {
+        "key": "wallet-balance",
+        "label": "Wallet balance",
+        "value": float(wallet.balance),
+        "currencyCode": wallet.currency,
+        "changeMessage": f"New balance for wallet {wallet.public_pan}: %@",
+    })]
