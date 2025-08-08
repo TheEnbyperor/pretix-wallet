@@ -3,6 +3,7 @@
 {% load urlreplace %}
 {% load bootstrap3 %}
 {% load money %}
+{% block title %}Wallet {{ object.pan }}{% endblock %}
 {% block inner %}
     <h1>Wallet <strong>{{ object.pan }}</strong></h1>
 

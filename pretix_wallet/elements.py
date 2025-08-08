@@ -35,7 +35,7 @@ def find_wallet(order_position: OrderPosition, order: Order) -> typing.Optional[
     elif hasattr(order.customer, "wallet"):
         return order.customer.wallet
     else:
-        qs = models.Wallet.objects.filter(order_position__order=order)
+        qs = models.Wallet.objects.filter(order_position__order=order).distinct()
         if qs.count() == 1:
             return qs.first()
 

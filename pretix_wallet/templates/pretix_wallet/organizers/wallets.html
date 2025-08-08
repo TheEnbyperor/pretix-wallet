@@ -3,6 +3,7 @@
 {% load urlreplace %}
 {% load bootstrap3 %}
 {% load money %}
+{% block title %}Wallets{% endblock %}
 {% block inner %}
     <h1>Wallets</h1>
     {% if wallets|length == 0 and not filter_form.filtered %}
