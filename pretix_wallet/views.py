@@ -2,13 +2,14 @@ from django.contrib import messages
 from django.db import transaction
 from django.db.models import OuterRef, Sum, Max, Subquery
 from django.db.models.functions import Coalesce
+from django.http import HttpResponseNotAllowed
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils.functional import cached_property
 from pretix.control.views.organizer import OrganizerDetailViewMixin, Organizer
 from pretix.control.permissions import OrganizerPermissionRequiredMixin
-from django.views.generic import ListView, FormView
-from . import models, forms
+from django.views.generic import ListView, FormView, DetailView
+from . import models, forms, signals
 import decimal
 
 
@@ -76,3 +77,86 @@ class WalletListView(OrganizerDetailViewMixin, OrganizerPermissionRequiredMixin,
     @cached_property
     def filter_form(self):
         return forms.WalletFilterForm(data=self.request.GET, request=self.request)
+
+
+class WalletView(OrganizerPermissionRequiredMixin, DetailView):
+    model = models.Wallet
+    template_name = 'pretix_wallet/organizers/wallet.html'
+    permission = 'can_change_orders'
+    context_object_name = 'wallet'
+    slug_url_kwarg = "pan"
+    slug_field = "pan"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['organizer'] = self.request.organizer
+        ctx['charge_form'] = forms.WalletChargeForm()
+        return ctx
+
+    def get_queryset(self):
+        return self.request.organizer.wallets.all()
+
+
+class WalletSettingsView(OrganizerPermissionRequiredMixin, FormView, DetailView):
+    model = models.Wallet
+    form_class = forms.WalletIndividualSettingsForm
+    template_name = 'pretix_wallet/organizers/wallet_settings.html'
+    permission = 'can_change_organizer_settings'
+    slug_url_kwarg = "pan"
+    slug_field = "pan"
+
+    def get_form_kwargs(self):
+        self.object = self.get_object()
+        kwargs = super().get_form_kwargs()
+        kwargs['obj'] = self.object
+        return kwargs
+
+    def get_success_url(self):
+        return reverse('plugins:pretix_wallet:wallet', kwargs={
+            'organizer': self.request.organizer.slug,
+            'pan': self.object.pan,
+        })
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        form = self.get_form()
+        if form.is_valid():
+            form.save()
+            if form.has_changed():
+                messages.success(self.request, "Your changes have been saved.")
+            return redirect(self.get_success_url())
+        else:
+            messages.error(self.request, "We could not save your changes. See below for details.")
+            return self.get(request)
+
+
+class WalletManualChargeView(OrganizerPermissionRequiredMixin, DetailView):
+    model = models.Wallet
+    permission = 'can_change_orders'
+    slug_url_kwarg = "pan"
+    slug_field = "pan"
+
+    def post(self, *args, **kwargs):
+        wallet = self.get_object()
+        form = forms.WalletChargeForm(self.request.POST)
+        if form.is_valid():
+            charged = False
+            with transaction.atomic():
+                if wallet.balance - form.cleaned_data["amount"] < wallet.settings.get("wallet_minimum_balance", as_type=decimal.Decimal):
+                    messages.error(self.request, "Insufficient balance.")
+                wallet.transactions.create(
+                    value=-form.cleaned_data["amount"],
+                    descriptor=form.cleaned_data["descriptor"] or "Charge",
+                )
+                charged = True
+
+            if charged:
+                signals.update_ticket_output.apply_async(kwargs={"wallet_pk": wallet.pk})
+                messages.success(self.request, "The wallet has been charged.")
+        else:
+            messages.error(self.request, "The wallet could not be charged.")
+
+        return redirect('plugins:pretix_wallet:wallet', organizer=self.request.organizer.slug, pan=wallet.pan)
+
+    def get(self, *args, **kwargs):
+        return HttpResponseNotAllowed(['POST'])

@@ -7,6 +7,9 @@ import decimal
 import random
 import string
 
+from pretix.base.settings import settings_hierarkey
+
+
 def luhn_checksum(n: str):
     m = [0, 2, 4, 6, 8, 1, 3, 5, 7, 9]
     digits = list(n)
@@ -29,7 +32,10 @@ def gen_wallet_pan(issuer):
             return pan
 
 
+@settings_hierarkey.add(parent_field='issuer', cache_namespace='pretix_wallet')
 class Wallet(LoggedModel):
+    settings_namespace = 'pretix_wallet'
+
     issuer = models.ForeignKey(
         "pretixbase.Organizer",
         related_name="wallets",
@@ -89,21 +95,21 @@ class WalletTransaction(models.Model):
         related_name="wallet_transactions",
         null=True,
         blank=True,
-        on_delete=models.SET_NULL
+        on_delete=models.CASCADE
     )
     order_payment = models.ForeignKey(
         'pretixbase.OrderPayment',
         related_name="wallet_transactions",
         null=True,
         blank=True,
-        on_delete=models.SET_NULL
+        on_delete=models.CASCADE
     )
     order_refund = models.ForeignKey(
         'pretixbase.OrderRefund',
         related_name="wallet_transactions",
         null=True,
         blank=True,
-        on_delete=models.SET_NULL
+        on_delete=models.CASCADE
     )
     descriptor = models.TextField(blank=True, null=False, default="")
     data = models.JSONField(default=dict)

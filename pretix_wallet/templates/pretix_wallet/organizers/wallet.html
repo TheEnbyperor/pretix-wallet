@@ -1,0 +1,80 @@
+{% extends "pretixcontrol/organizers/base.html" %}
+{% load i18n %}
+{% load urlreplace %}
+{% load bootstrap3 %}
+{% load money %}
+{% block inner %}
+    <h1>Wallet <strong>{{ object.pan }}</strong></h1>
+
+    <div class="row">
+        <div class="col-md-3">
+            <p class="lead">
+                Balance: <strong>{{ object.balance|money:object.currency }}</strong><br/>
+                Created: <strong>{{ object.created_at|date:"SHORT_DATETIME_FORMAT" }}</strong>
+            </p>
+        </div>
+        <div class="col-md-3">
+            <div class="btn-group">
+                <a href="{% url "plugins:pretix_wallet:wallet_settings" organizer=organizer.slug pan=object.pan %}"
+                   class="btn btn-primary"><i class="fa fa-edit"></i> Settings</a>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-6">
+            <div class="panel panel-default items">
+                <div class="panel-heading">
+                    <h3 class="panel-title">
+                        Manual charge
+                    </h3>
+                </div>
+                <div class="panel-body">
+                    <form class="form" method="post"
+                          action="{% url "plugins:pretix_wallet:wallet_manual_charge" organizer=organizer.slug pan=object.pan %}">
+                        {% csrf_token %}
+                        {% bootstrap_field charge_form.descriptor %}
+                        {% bootstrap_field charge_form.amount %}
+                        <button class="btn btn-default" type="submit">
+                            Charge
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <h2>Transactions</h2>
+    <div class="table-responsive">
+        <table class="table table-condensed table-hover">
+            <thead>
+            <tr>
+                <th>Time</th>
+                <th>Description</th>
+                <th></th>
+                <th>Amount</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% if object.transactions.count %}
+                {% for transaction in object.transactions.all %}
+                    <tr>
+                        <td>{{ transaction.timestamp|date:"SHORT_DATETIME_FORMAT" }}</td>
+                        <td>{{ transaction.descriptor }}</td>
+                        <td>
+                            {% if transaction.order_position %}
+                                <a href="{% url "control:event.order" event=transaction.order_position.event.slug organizer=transaction.order_position.organizer.slug code=transaction.order_position.order.code %}">
+                                    View order
+                                </a>
+                            {% endif %}
+                        </td>
+                        <td>{{ transaction.value|money:object.currency }}</td>
+                    </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="4">No transactions yet.</td>
+                </tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}

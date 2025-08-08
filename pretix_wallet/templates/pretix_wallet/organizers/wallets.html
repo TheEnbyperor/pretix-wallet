@@ -49,7 +49,7 @@
                     <th>{% trans "Last transaction" %}
                         <a href="?{% url_replace request 'ordering' '-last_tx' %}"><i class="fa fa-caret-down"></i></a>
                         <a href="?{% url_replace request 'ordering' 'last_tx' %}"><i class="fa fa-caret-up"></i></a></th>
-                    <th class="text-right">{% trans "Current value" %}
+                    <th class="text-right">{% trans "Current balance" %}
                         <a href="?{% url_replace request 'ordering' '-value' %}"><i class="fa fa-caret-down"></i></a>
                         <a href="?{% url_replace request 'ordering' 'value' %}"><i class="fa fa-caret-up"></i></a></th>
                     <th></th>
@@ -59,7 +59,7 @@
                 {% for w in wallets %}
                     <tr>
                         <td>
-                            <strong>{{ w.pan }}</strong>
+                            <strong><a href="{% url "plugins:pretix_wallet:wallet" organizer=request.organizer.slug pan=w.pan %}">{{ w.pan }}</a></strong>
                         </td>
                         <td>
                             {% if w.customer %}

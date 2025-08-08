@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator
 from django.db.models import F, Q
 from pretix.base.forms import SettingsForm
 from pretix.control.forms.filter import FilterForm
@@ -34,6 +35,13 @@ class WalletSettingsForm(SettingsForm):
         max_value=19,
         initial=16,
     )
+    wallet_minimum_balance = forms.DecimalField(
+        label="Default minimum balance",
+        decimal_places=2,
+        max_digits=13,
+        initial=0,
+        validators=[MaxValueValidator(0)],
+    )
 
     def clean(self):
         if self.cleaned_data.get("wallet_create_for_customers") and not self.cleaned_data.get("wallet_default_currency"):
@@ -45,6 +53,26 @@ class WalletSettingsForm(SettingsForm):
             raise ValidationError({
                 "wallet_iin": "IIN is too long for the chosen PAN length",
             })
+
+
+class WalletIndividualSettingsForm(SettingsForm):
+    wallet_minimum_balance = forms.DecimalField(
+        label="Minimum balance",
+        decimal_places=2,
+        max_digits=13,
+        initial=0,
+        validators=[MaxValueValidator(0)],
+        required=False,
+        help_text="Set an empty value to use the organizer default"
+    )
+
+
+class WalletChargeForm(forms.Form):
+    descriptor = forms.CharField(required=False)
+    amount = forms.DecimalField(
+        max_digits=13, decimal_places=2,
+        help_text="Enter a negative amount for top-ups",
+    )
 
 
 class WalletFilterForm(FilterForm):
