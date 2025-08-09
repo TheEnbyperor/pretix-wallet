@@ -5,24 +5,40 @@
 {% load money %}
 {% block title %}Wallet {{ object.pan }}{% endblock %}
 {% block inner %}
-    <h1>Wallet <strong>{{ object.pan }}</strong></h1>
+    <h1>
+        Wallet <strong>{{ object.pan }}</strong>
 
-    <div class="row">
-        <div class="col-md-3">
-            <p class="lead">
-                Balance: <strong>{{ object.balance|money:object.currency }}</strong><br/>
-                Created: <strong>{{ object.created_at|date:"SHORT_DATETIME_FORMAT" }}</strong>
-            </p>
-        </div>
-        <div class="col-md-3">
-            <div class="btn-group">
-                <a href="{% url "plugins:pretix_wallet:wallet_settings" organizer=organizer.slug pan=object.pan %}"
-                   class="btn btn-primary"><i class="fa fa-edit"></i> Settings</a>
-            </div>
+    </h1>
+    <div class="btn-toolbar">
+        <div class="btn-group">
+            <a href="{% url "plugins:pretix_wallet:wallet_settings" organizer=organizer.slug pan=object.pan %}"
+               class="btn btn-primary"><i class="fa fa-edit"></i> Settings</a>
         </div>
     </div>
     <div class="row">
-        <div class="col-md-6">
+        <div class="col-md-6 col-xs-12">
+            <div class="panel panel-primary">
+                <div class="panel-body">
+                    <dl class="dl-horizontal">
+                        <dt>Balance</dt>
+                        <dd>{{ object.balance|money:object.currency }}</dd>
+                        <dt>Created</dt>
+                        <dd>{{ object.created_at|date:"SHORT_DATETIME_FORMAT" }}</dd>
+                        <dt>Customer</dt>
+                        <dd>
+                            {% if object.customer %}
+                                <a href="{% url "control:organizer.customer" organizer=request.organizer.slug customer=object.customer.identifier %}">
+                                    {{ object.customer.identifier }} – {{ object.customer.email }}
+                                </a>
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xs-12">
             <div class="panel panel-default items">
                 <div class="panel-heading">
                     <h3 class="panel-title">
@@ -50,7 +66,6 @@
             <tr>
                 <th>Time</th>
                 <th>Description</th>
-                <th></th>
                 <th>Amount</th>
             </tr>
             </thead>
@@ -59,13 +74,44 @@
                 {% for transaction in object.transactions.all %}
                     <tr>
                         <td>{{ transaction.timestamp|date:"SHORT_DATETIME_FORMAT" }}</td>
-                        <td>{{ transaction.descriptor }}</td>
                         <td>
-                            {% if transaction.order_position %}
-                                <a href="{% url "control:event.order" event=transaction.order_position.event.slug organizer=transaction.order_position.organizer.slug code=transaction.order_position.order.code %}">
-                                    View order
-                                </a>
-                            {% endif %}
+                            {{ transaction.descriptor }}
+                            <dl class="dl-horizontal">
+                                {% with device=transaction.device %}
+                                    {% if device %}
+                                        <dt>Device</dt>
+                                        <dd>
+                                            <a href="{% url "control:organizer.device.edit" organizer=device.organizer.slug device=device.device_id %}">
+                                                #{{ device.device_id }} - {{ device.name }}
+                                            </a>
+                                        </dd>
+                                    {% endif %}
+                                    {% if transaction.order_position %}
+                                        <dt>Order position</dt>
+                                        <dd>
+                                            <a href="{% url "control:event.order" event=transaction.order_position.event.slug organizer=transaction.order_position.organizer.slug code=transaction.order_position.order.code %}">
+                                                {{ transaction.order_position.code }}
+                                            </a>
+                                        </dd>
+                                    {% endif %}
+                                    {% if transaction.order_payment %}
+                                        <dt>Order payment</dt>
+                                        <dd>
+                                            <a href="{% url "control:event.order" event=transaction.order_payment.order.event.slug organizer=transaction.order_payment.order.organizer.slug code=transaction.order_payment.order.code %}">
+                                                {{ transaction.order_payment.full_id }}
+                                            </a>
+                                        </dd>
+                                    {% endif %}
+                                    {% if transaction.order_refund %}
+                                        <dt>Order payment</dt>
+                                        <dd>
+                                            <a href="{% url "control:event.order" event=transaction.order_refund.order.event.slug organizer=transaction.order_refund.order.organizer.slug code=transaction.order_refund.order.code %}">
+                                                {{ transaction.order_refund.full_id }}
+                                            </a>
+                                        </dd>
+                                    {% endif %}
+                                {% endwith %}
+                            </dl>
                         </td>
                         <td>{{ transaction.value|money:object.currency }}</td>
                     </tr>

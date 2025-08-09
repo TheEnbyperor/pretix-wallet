@@ -1,0 +1,11 @@
+{% load money %}
+<div class="panel panel-primary">
+    <div class="panel-heading">
+        <h3 class="panel-title">Wallet <strong>{{ wallet.public_pan }}</strong></h3>
+    </div>
+    <div class="panel-body">
+        <p class="lead">
+            Balance: <strong>{{ wallet.balance|money:wallet.currency }}</strong>
+        </p>
+    </div>
+</div>

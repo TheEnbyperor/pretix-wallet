@@ -1,0 +1,8 @@
+<dl class="dl-horizontal">
+    <dt>Wallet</dt>
+    <dd>
+        <a href="{% url "plugins:pretix_wallet:wallet" organizer=wallet.issuer.slug pan=wallet.pan %}">
+            {{ wallet.pan }}
+        </a>
+    </dd>
+</dl>

@@ -96,20 +96,34 @@ class WalletView(OrganizerPermissionRequiredMixin, DetailView):
     def get_queryset(self):
         return self.request.organizer.wallets.all()
 
-
-class WalletSettingsView(OrganizerPermissionRequiredMixin, FormView, DetailView):
+class WalletSettingsView(OrganizerPermissionRequiredMixin, DetailView):
     model = models.Wallet
-    form_class = forms.WalletIndividualSettingsForm
     template_name = 'pretix_wallet/organizers/wallet_settings.html'
     permission = 'can_change_organizer_settings'
     slug_url_kwarg = "pan"
     slug_field = "pan"
 
-    def get_form_kwargs(self):
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data()
+        ctx['form'] = self.form
+        ctx['organizer'] = self.request.organizer
+        return ctx
+
+    @cached_property
+    def form(self):
         self.object = self.get_object()
-        kwargs = super().get_form_kwargs()
-        kwargs['obj'] = self.object
-        return kwargs
+        return forms.WalletIndividualSettingsForm(
+            instance=self.object,
+            data=self.request.POST if self.request.method == "POST" else None,
+            customers=self.request.organizer.settings.customer_accounts and (
+                self.request.user.has_organizer_permission(
+                    self.request.organizer, 'can_manage_customers', request=self.request
+                )
+            ),
+            initial={
+                "wallet_minimum_balance": self.object.settings._cache().get("wallet_minimum_balance", None),
+            }
+        )
 
     def get_success_url(self):
         return reverse('plugins:pretix_wallet:wallet', kwargs={
@@ -119,11 +133,15 @@ class WalletSettingsView(OrganizerPermissionRequiredMixin, FormView, DetailView)
 
     @transaction.atomic
     def post(self, request, *args, **kwargs):
-        form = self.get_form()
-        if form.is_valid():
-            form.save()
-            if form.has_changed():
-                messages.success(self.request, "Your changes have been saved.")
+        if self.form.is_valid():
+            self.form.save()
+
+            if self.form.cleaned_data["wallet_minimum_balance"]:
+                self.object.settings.set("wallet_minimum_balance", self.form.cleaned_data["wallet_minimum_balance"])
+            else:
+                self.object.settings.delete("wallet_minimum_balance")
+
+            messages.success(self.request, "Your changes have been saved.")
             return redirect(self.get_success_url())
         else:
             messages.error(self.request, "We could not save your changes. See below for details.")

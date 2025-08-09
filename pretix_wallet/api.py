@@ -2,6 +2,7 @@ import decimal
 from django.db import transaction
 from django.http import Http404
 from i18nfield.rest_framework import I18nAwareModelSerializer
+from pretix.base.models import Device, TeamAPIToken
 from pretix.helpers import OF_SELF
 from rest_framework import viewsets, serializers, status
 from rest_framework.decorators import action
@@ -50,7 +51,13 @@ class WalletViewSet(viewsets.ReadOnlyModelViewSet):
         amount = serializers.DecimalField(max_digits=13, decimal_places=2).to_internal_value(request.data.get('amount'))
         descriptor = serializers.CharField(allow_blank=True, allow_null=True).to_internal_value(request.data.get('descriptor', ''))
         data = serializers.JSONField(required=False, allow_null=True).to_internal_value(request.data.get('data', {}))
-        if wallet.balance - amount < decimal.Decimal('0.00'):
+        if isinstance(request.auth, Device):
+            data["_device_id"] = request.auth.pk
+        elif isinstance(request.auth, TeamAPIToken):
+            data["_team_token_id"] = request.auth.pk
+        else:
+            data["_user_id"] = request.user.pk
+        if wallet.balance - amount < wallet.settings.get("wallet_minimum_balance", as_type=decimal.Decimal):
             return Response({
                 "amount": ["Insufficient balance"],
             }, status=status.HTTP_402_PAYMENT_REQUIRED)

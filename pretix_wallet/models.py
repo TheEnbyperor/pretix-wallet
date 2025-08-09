@@ -1,6 +1,6 @@
 from django.core import validators
 from django.core.exceptions import ValidationError
-from pretix.base.models import LoggedModel
+from pretix.base.models import LoggedModel, Device
 from django.conf import settings
 from django.db import models
 import decimal
@@ -116,6 +116,11 @@ class WalletTransaction(models.Model):
 
     class Meta:
         ordering = ('-timestamp',)
+
+    def device(self):
+        if "_device_id" not in self.data:
+            return None
+        return Device.objects.get(pk=self.data["_device_id"])
 
 
 class WalletItem(models.Model):

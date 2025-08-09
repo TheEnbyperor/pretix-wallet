@@ -15,11 +15,12 @@ class PluginApp(PluginConfig):
 
     class PretixPluginMeta:
         name = gettext_lazy("Wallet")
-        author = "Q Misell"
-        description = gettext_lazy("Short description")
+        author = "AS207960 Cyfyngedig"
+        description = gettext_lazy("Allows users to pre-buy wallet balances at order time e.g. for an event bar.")
         visible = True
+        experimental = True
         version = __version__
-        category = "PAYMENT"
+        category = "FEATURE"
         compatibility = "pretix>=2.7.0"
         settings_links = []
         navigation_links = []

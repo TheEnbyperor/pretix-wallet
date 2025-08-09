@@ -2,9 +2,13 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator
 from django.db.models import F, Q
+from django.urls import reverse
+from django_scopes.forms import SafeModelChoiceField
 from pretix.base.forms import SettingsForm
 from pretix.control.forms.filter import FilterForm
 from django import forms
+from pretix.control.forms.widgets import Select2 as BaseSelect2
+
 from . import models
 
 
@@ -55,16 +59,50 @@ class WalletSettingsForm(SettingsForm):
             })
 
 
-class WalletIndividualSettingsForm(SettingsForm):
+class Select2(BaseSelect2):
+    def build_attrs(self, base_attrs, extra_attrs=None):
+        attrs = super().build_attrs(base_attrs, extra_attrs)
+        if self.choices.field.empty_label:
+            attrs["data-placeholder"] = self.choices.field.empty_label
+        return attrs
+
+
+class WalletIndividualSettingsForm(forms.ModelForm):
     wallet_minimum_balance = forms.DecimalField(
         label="Minimum balance",
         decimal_places=2,
         max_digits=13,
-        initial=0,
+        initial=None,
         validators=[MaxValueValidator(0)],
         required=False,
-        help_text="Set an empty value to use the organizer default"
+        help_text="Set an empty value to use the organizer default",
     )
+
+    class Meta:
+        model = models.Wallet
+        fields = ('customer',)
+        field_classes = {
+            'customer': SafeModelChoiceField,
+        }
+
+    def __init__(self, *args, **kwargs):
+        customers = kwargs.pop('customers')
+        super().__init__(*args, **kwargs)
+
+        if customers:
+            self.fields['customer'].queryset = self.instance.issuer.customers.all()
+            self.fields['customer'].widget = Select2(
+                attrs={
+                    'data-model-select2': 'generic',
+                    'data-select2-url': reverse('control:organizer.customers.select2', kwargs={
+                        'organizer': self.instance.issuer.slug,
+                    }),
+                }
+            )
+            self.fields['customer'].widget.choices = self.fields['customer'].choices
+            self.fields['customer'].required = False
+        else:
+            del self.fields['customer']
 
 
 class WalletChargeForm(forms.Form):

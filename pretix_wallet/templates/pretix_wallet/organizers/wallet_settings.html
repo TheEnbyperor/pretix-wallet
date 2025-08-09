@@ -4,21 +4,26 @@
 {% load formset_tags %}
 {% block title %}Wallet settings {{ object.pan }}{% endblock %}
 {% block content %}
-<h1>
-    Wallet settings: <strong>{{ object.pan }}</strong>
-</h1>
+    <h1>
+        Wallet settings: <strong>{{ object.pan }}</strong>
+        <a class="btn btn-link btn-lg"
+           href="{% url "plugins:pretix_wallet:wallet_settings" organizer=organizer.slug pan=object.pan %}">
+            Back to wallet
+        </a>
+    </h1>
 
-<form action="" method="post" class="form-horizontal" enctype="multipart/form-data">
-    {% csrf_token %}
-    {% bootstrap_form_errors form %}
-    <fieldset>
-        <legend>{% trans "General" %}</legend>
-        {% bootstrap_field form.wallet_minimum_balance layout="control" %}
-    </fieldset>
-    <div class="form-group submit-group">
-        <button type="submit" class="btn btn-primary btn-save">
-            {% trans "Save" %}
-        </button>
-    </div>
-</form>
+    <form method="post" class="form-horizontal" href="">
+        {% csrf_token %}
+        {% bootstrap_form form layout='horizontal' %}
+        <div class="form-group submit-group">
+            <a class="btn btn-default btn-lg"
+               href="{% url "plugins:pretix_wallet:wallet_settings" organizer=organizer.slug pan=object.pan %}">
+                {% trans "Cancel" %}
+            </a>
+            <button class="btn btn-primary btn-save btn-lg" type="submit">
+                {% trans "Save" %}
+            </button>
+            <div class="clearfix"></div>
+        </div>
+    </form>
 {% endblock %}
