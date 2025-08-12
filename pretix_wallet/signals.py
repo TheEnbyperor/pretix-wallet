@@ -10,7 +10,7 @@ from pretix.base.signals import register_payment_providers, customer_created, or
 from pretix.control.signals import nav_organizer, item_forms
 from pretix.presale.signals import order_info_top
 from pretix.celery_app import app
-from pretix_uic_barcode.signals import register_barcode_element_generators, generate_google_wallet_module, generate_apple_wallet_module
+from pretix_uic_barcode.signals import register_barcode_element_generators, register_vas_element_generators, generate_google_wallet_module, generate_apple_wallet_module
 from pretix_uic_barcode import ticket_output
 
 from . import payment, models, elements, forms
@@ -137,8 +137,13 @@ def order_issue_balance(sender, order, **kwargs):
 
 
 @receiver(register_barcode_element_generators, dispatch_uid="wallet_barcode_element_generator")
-def element_generator(sender, **kwargs):
+def barcode_element_generator(sender, **kwargs):
     return [elements.WalletBarcodeElementGenerator]
+
+
+@receiver(register_vas_element_generators, dispatch_uid="wallet_vas_element_generator")
+def vas_element_generator(sender, **kwargs):
+    return [elements.WalletVASElementGenerator]
 
 
 @receiver(generate_google_wallet_module, dispatch_uid="wallet_google_module_generator")
