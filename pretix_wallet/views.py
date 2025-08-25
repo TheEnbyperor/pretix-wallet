@@ -96,6 +96,7 @@ class WalletView(OrganizerPermissionRequiredMixin, DetailView):
     def get_queryset(self):
         return self.request.organizer.wallets.all()
 
+
 class WalletSettingsView(OrganizerPermissionRequiredMixin, DetailView):
     model = models.Wallet
     template_name = 'pretix_wallet/organizers/wallet_settings.html'

@@ -21,7 +21,7 @@ def luhn_checksum(n: str):
     return 0 if x == 10 else x
 
 def gen_wallet_pan(issuer):
-    pan_len = issuer.settings.get("wallet_pan_length", 16)
+    pan_len = issuer.settings.get("wallet_pan_length", 16, as_type=int)
     iin = issuer.settings.get("wallet_iin", "")
     while True:
         random_len = pan_len - 1 - len(iin)

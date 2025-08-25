@@ -130,7 +130,7 @@ def order_issue_balance(sender, order, **kwargs):
                         wallet.save()
 
                 wallet.transactions.create(value=tbi, order_position=p, descriptor=f"Order #{order.full_code}")
-                update_ticket_output.apply_async(kwargs={"wallet": wallet})
+                update_ticket_output.apply_async(kwargs={"wallet_pk": wallet.pk})
 
     if any_wallets:
         tickets.invalidate_cache.apply_async(kwargs={'event': sender.pk, 'order': order.pk})
@@ -160,9 +160,9 @@ def apple_module_generator(sender, **kwargs):
 def update_ticket_output(wallet_pk):
     wallet = models.Wallet.objects.get(pk=wallet_pk)
     if wallet.order_position:
-        ticket_output.update_ticket_output.apply_async(kwargs={"position_pk": wallet.order_position.pk})
+        ticket_output.update_ticket_output.apply_async(kwargs={"event": wallet.order_position.event.pk, "position_pk": wallet.order_position.pk})
     
     if wallet.customer:
         for order in wallet.customer.orders.all():
-            ticket_output.update_ticket_output_all.apply_async(kwargs={"order_pk": order.pk})
+            ticket_output.update_ticket_output_all.apply_async(kwargs={"event": order.event.pk, "order_pk": order.pk})
         

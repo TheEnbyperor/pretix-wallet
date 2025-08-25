@@ -3,7 +3,7 @@ from django.utils.translation import gettext_lazy
 from . import __version__
 
 try:
-    from pretix.base.plugins import PluginConfig
+    from pretix.base.plugins import PluginConfig, PLUGIN_LEVEL_ORGANIZER
 except ImportError:
     raise RuntimeError("Please use pretix 2.7 or above to run this plugin!")
 
@@ -22,6 +22,7 @@ class PluginApp(PluginConfig):
         version = __version__
         category = "FEATURE"
         compatibility = "pretix>=2.7.0"
+        # level = PLUGIN_LEVEL_ORGANIZER
         settings_links = []
         navigation_links = []
 

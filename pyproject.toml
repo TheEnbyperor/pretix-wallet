@@ -36,6 +36,9 @@ repository = "https://github.com/TheEnbyperor/pretix-wallet"
 [tool.setuptools]
 include-package-data = true
 
+[tool.setuptools.package-data]
+"pretix_wallet" = ["asn1/*"]
+
 [tool.setuptools.dynamic]
 version = {attr = "pretix_wallet.__version__"}
 
