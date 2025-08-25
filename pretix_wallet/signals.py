@@ -4,7 +4,7 @@ from django.db import transaction
 from django.dispatch import receiver
 from django.template.loader import get_template
 from django.urls import resolve, reverse
-from pretix.base.models.orders import Order
+from pretix.base.models.orders import Order, OrderPosition
 from pretix.base.services import tickets
 from pretix.base.signals import register_payment_providers, customer_created, order_paid, order_changed
 from pretix.control.signals import nav_organizer, item_forms
@@ -96,41 +96,49 @@ def item_issue_balance(sender, item, request, **kwargs):
 @receiver(order_changed, dispatch_uid="wallet_order_changed_issue_balance")
 @transaction.atomic()
 def order_issue_balance(sender, order, **kwargs):
-    if order.status != Order.STATUS_PAID:
-        return
     any_wallets = False
-    for p in order.positions.all():
-        if hasattr(p.item, "wallet") and p.item.wallet.issue_wallet_balance:
-            issued = decimal.Decimal('0.00')
-            for wt in p.wallet_transactions.all().distinct():
-                issued += wt.value
-            tbi = p.price - issued
-            if tbi > 0:
-                any_wallets = True
+    for p in OrderPosition.all.filter(order=order):
+        if order.status == Order.STATUS_PAID:
+            if not p.canceled and hasattr(p.item, "wallet") and p.item.wallet.issue_wallet_balance:
+                issued = decimal.Decimal('0.00')
+                for wt in p.wallet_transactions.all().distinct():
+                    issued += wt.value
+                tbi = p.price - issued
+                if tbi > 0:
+                    any_wallets = True
 
-                if order.customer:
-                    if hasattr(order.customer, "wallet"):
-                        wallet = order.customer.wallet
+                    if order.customer:
+                        if hasattr(order.customer, "wallet"):
+                            wallet = order.customer.wallet
+                        else:
+                            wallet = models.Wallet.objects.create(
+                                issuer=sender.organizer,
+                                customer=order.customer,
+                                currency=sender.settings.wallet_default_currency,
+                            )
+                            wallet.save()
                     else:
-                        wallet = models.Wallet.objects.create(
-                            issuer=sender.organizer,
-                            customer=order.customer,
-                            currency=sender.settings.wallet_default_currency,
-                        )
-                        wallet.save()
-                else:
-                    if hasattr(order, "wallet"):
-                        wallet = order.wallet
-                    else:
-                        wallet = models.Wallet.objects.create(
-                            issuer=sender.organizer,
-                            order_position=p,
-                            currency=sender.settings.wallet_default_currency,
-                        )
-                        wallet.save()
+                        if hasattr(order, "wallet"):
+                            wallet = order.wallet
+                        else:
+                            wallet = models.Wallet.objects.create(
+                                issuer=sender.organizer,
+                                order_position=p,
+                                currency=sender.settings.wallet_default_currency,
+                            )
+                            wallet.save()
 
-                wallet.transactions.create(value=tbi, order_position=p, descriptor=f"Order #{order.full_code}")
+                    wallet.transactions.create(value=tbi, order_position=p, descriptor=f"Order #{order.full_code}")
+                    update_ticket_output.apply_async(kwargs={"wallet_pk": wallet.pk})
+
+        if p.wallet_transactions.count() > 0 and (p.canceled or order.status == Order.STATUS_CANCELED or order.status == Order.STATUS_REFUNDED):
+            any_wallets = True
+            wallets = list(set([w["wallet"] for w in p.wallet_transactions.values("wallet").distinct()]))
+            wallets = models.Wallet.objects.filter(pk__in=wallets)
+            p.wallet_transactions.all().delete()
+            for wallet in wallets:
                 update_ticket_output.apply_async(kwargs={"wallet_pk": wallet.pk})
+
 
     if any_wallets:
         tickets.invalidate_cache.apply_async(kwargs={'event': sender.pk, 'order': order.pk})
