@@ -97,7 +97,7 @@ def generate_google_wallet_module(order_position: OrderPosition, order: Order):
             }
         },
         "uri": build_absolute_uri(order.event, "presale:event.order", {
-            "order": order.pk, "secret": order.secret
+            "order": order.code, "secret": order.secret
         }),
     })]
 

@@ -21,8 +21,8 @@ class PluginApp(PluginConfig):
         experimental = True
         version = __version__
         category = "FEATURE"
-        compatibility = "pretix>=2.7.0"
-        # level = PLUGIN_LEVEL_ORGANIZER
+        compatibility = "pretix>=2.7.1"
+        level = PLUGIN_LEVEL_ORGANIZER
         settings_links = []
         navigation_links = []
 
