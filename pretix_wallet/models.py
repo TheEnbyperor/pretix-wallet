@@ -70,6 +70,12 @@ class Wallet(LoggedModel):
         if not self.pan:
             self.pan = gen_wallet_pan(self.issuer)
 
+        if self.order_position.order.customer and not self.customer:
+            self.customer = self.order_position.order.customer
+
+        if self.order.customer and not self.customer:
+            self.customer = self.order.customer
+
         super().save(*args, **kwargs)
 
     @property

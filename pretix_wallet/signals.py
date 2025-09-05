@@ -219,6 +219,8 @@ def order_issue_balance(sender, order, **kwargs):
                     else:
                         if hasattr(order, "wallet"):
                             wallet = order.wallet
+                        elif hasattr(p, "wallet"):
+                            wallet = p.wallet
                         else:
                             wallet = models.Wallet.objects.create(
                                 issuer=sender.organizer,

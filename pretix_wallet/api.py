@@ -2,7 +2,7 @@ import decimal
 from django.db import transaction
 from django.http import Http404
 from i18nfield.rest_framework import I18nAwareModelSerializer
-from pretix.base.models import Device, TeamAPIToken, Customer
+from pretix.base.models import Device, TeamAPIToken, Customer, Order, OrderPosition
 from pretix.helpers import OF_SELF
 from rest_framework import viewsets, serializers, status
 from rest_framework.decorators import action
@@ -15,21 +15,37 @@ class WalletSerializer(I18nAwareModelSerializer):
     balance = serializers.DecimalField(max_digits=13, decimal_places=2, read_only=True)
     pan = serializers.CharField(read_only=True)
     customer = serializers.SlugRelatedField(slug_field='identifier', queryset=Customer.objects.none(), required=False)
+    order = serializers.SlugRelatedField(slug_field='code', queryset=Order.objects.none(), required=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['customer'].queryset = self.context['organizer'].customers.all()
+        self.fields['order'].queryset = self.context['organizer'].orders.all()
+        self.fields['order_position'] = serializers.PrimaryKeyRelatedField(
+            required=False, allow_null=True,
+            queryset=OrderPosition.all.filter(order__event__organizer=self.context['organizer']),
+        )
 
     class Meta:
         model = models.Wallet
         fields = ('id', 'balance', 'customer', 'created_at', 'pan',
-                  'public_pan', 'currency')
+                  'public_pan', 'currency', 'order')
 
     def validate(self, attrs):
         if customer := attrs.get('customer'):
-            if hasattr(customer, 'wallet'):
+            if hasattr(customer, 'wallet') and customer.wallet != self.instance:
                 raise serializers.ValidationError({
                     "customer": "Customer already has a Wallet",
+                })
+        if order := attrs.get('order'):
+            if hasattr(order, 'wallet') and order.wallet != self.instance:
+                raise serializers.ValidationError({
+                    "order": "Order already has a Wallet",
+                })
+        if order_position := attrs.get('order_position'):
+            if hasattr(order_position, 'wallet') and order_position.wallet != self.instance:
+                raise serializers.ValidationError({
+                    "order_position": "Order position already has a Wallet",
                 })
         return attrs
 
