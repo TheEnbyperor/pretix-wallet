@@ -26,7 +26,7 @@ def control_nav_orga_import(sender, request=None, **kwargs):
     url = resolve(request.path_info)
     if not request.user.has_organizer_permission(request.organizer, "can_change_orders", request=request):
         return []
-    if not request.organizer.events.filter(plugins__icontains="pretix_wallet"):
+    if "pretix_wallet" not in request.organizer.plugins:
         return []
     return [
         {
@@ -67,8 +67,14 @@ def order_info_balance(sender, request, order, **kwargs):
     template = get_template("pretix_wallet/order/balance.html")
 
     wallets = []
+
     if hasattr(order.customer, "wallet"):
         wallets.append(order.customer.wallet)
+
+    for order_position in order.positions.all():
+        if hasattr(order_position, "wallet"):
+            if order_position.wallet not in wallets:
+                wallets.append(order_position.wallet)
 
     ctx = {
         'order': order,
