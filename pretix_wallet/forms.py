@@ -59,6 +59,13 @@ class WalletSettingsForm(SettingsForm):
             })
 
 
+class WalletEventSettingsForm(SettingsForm):
+    wallet_create_for_orders = forms.BooleanField(
+        label="Create wallets for all orders - i.e. without a balance",
+        required=False
+    )
+
+
 class Select2(BaseSelect2):
     def build_attrs(self, base_attrs, extra_attrs=None):
         attrs = super().build_attrs(base_attrs, extra_attrs)

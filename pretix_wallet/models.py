@@ -47,6 +47,12 @@ class Wallet(LoggedModel):
         null=True, blank=True,
         on_delete=models.SET_NULL
     )
+    order = models.OneToOneField(
+        "pretixbase.Order",
+        related_name="wallet",
+        null=True, blank=True,
+        on_delete=models.SET_NULL
+    )
     order_position = models.OneToOneField(
         "pretixbase.OrderPosition",
         related_name="wallet",

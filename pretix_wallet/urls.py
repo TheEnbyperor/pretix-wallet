@@ -9,6 +9,7 @@ urlpatterns = [
     path("control/organizer/<organizer>/wallets/wallet/<str:pan>/settings/", views.WalletSettingsView.as_view(), name='wallet_settings'),
     path("control/organizer/<organizer>/wallets/wallet/<str:pan>/manual_charge/", views.WalletManualChargeView.as_view(), name='wallet_manual_charge'),
     path("control/organizer/<organizer>/wallets/settings/", views.SettingsView.as_view(), name='settings'),
+    path("control/event/<organizer>/<event>/wallets/settings/", views.EventSettingsView.as_view(), name='event_settings'),
 ]
 
 urls.orga_router.register('wallets', api.WalletViewSet, basename='wallets')

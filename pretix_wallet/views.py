@@ -6,6 +6,8 @@ from django.http import HttpResponseNotAllowed
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils.functional import cached_property
+from pretix.base.models import Event
+from pretix.control.views.event import EventSettingsViewMixin, EventSettingsFormView
 from pretix.control.views.organizer import OrganizerDetailViewMixin, Organizer
 from pretix.control.permissions import OrganizerPermissionRequiredMixin
 from django.views.generic import ListView, FormView, DetailView
@@ -40,11 +42,31 @@ class SettingsView(OrganizerDetailViewMixin, OrganizerPermissionRequiredMixin, F
                         k: form.cleaned_data.get(k) for k in form.changed_data
                     }
                 )
+                signals.create_wallets_for_customers.apply_async(kwargs={"organizer": self.request.organizer.pk})
                 messages.success(self.request, "Your changes have been saved.")
             return redirect(self.get_success_url())
         else:
             messages.error(self.request, "We could not save your changes. See below for details.")
             return self.get(request)
+
+
+class EventSettingsView(EventSettingsViewMixin, EventSettingsFormView):
+    model = Event
+    form_class = forms.WalletEventSettingsForm
+    template_name = 'pretix_wallet/organizers/event_settings.html'
+    permission = "can_change_event_settings"
+
+    def get_success_url(self) -> str:
+        return reverse(
+            "plugins:pretix_wallet:event_settings",
+            kwargs={
+                "organizer": self.request.event.organizer.slug,
+                "event": self.request.event.slug,
+            },
+        )
+
+    def form_success(self):
+        signals.create_wallets_for_orders.apply_async(kwargs={"event": self.request.event.pk})
 
 
 class WalletListView(OrganizerDetailViewMixin, OrganizerPermissionRequiredMixin, ListView):

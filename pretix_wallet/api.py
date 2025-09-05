@@ -2,7 +2,7 @@ import decimal
 from django.db import transaction
 from django.http import Http404
 from i18nfield.rest_framework import I18nAwareModelSerializer
-from pretix.base.models import Device, TeamAPIToken
+from pretix.base.models import Device, TeamAPIToken, Customer
 from pretix.helpers import OF_SELF
 from rest_framework import viewsets, serializers, status
 from rest_framework.decorators import action
@@ -13,16 +13,32 @@ from . import models, signals
 
 class WalletSerializer(I18nAwareModelSerializer):
     balance = serializers.DecimalField(max_digits=13, decimal_places=2, read_only=True)
-    issuer = serializers.SlugRelatedField(slug_field='slug', read_only=True)
-    customer = serializers.SlugRelatedField(slug_field='identifier', read_only=True)
+    pan = serializers.CharField(read_only=True)
+    customer = serializers.SlugRelatedField(slug_field='identifier', queryset=Customer.objects.none(), required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['customer'].queryset = self.context['organizer'].customers.all()
 
     class Meta:
         model = models.Wallet
-        fields = ('id', 'issuer', 'balance', 'customer', 'created_at', 'pan',
+        fields = ('id', 'balance', 'customer', 'created_at', 'pan',
                   'public_pan', 'currency')
 
+    def validate(self, attrs):
+        if customer := attrs.get('customer'):
+            if hasattr(customer, 'wallet'):
+                raise serializers.ValidationError({
+                    "customer": "Customer already has a Wallet",
+                })
+        return attrs
 
-class WalletViewSet(viewsets.ReadOnlyModelViewSet):
+    def create(self, validated_data):
+        validated_data["issuer"] = self.context["organizer"]
+        return super().create(validated_data)
+
+
+class WalletViewSet(viewsets.ModelViewSet):
     serializer_class = WalletSerializer
     queryset = models.Wallet.objects.none()
     permission = 'can_change_orders'

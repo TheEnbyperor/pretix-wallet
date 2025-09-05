@@ -4,10 +4,12 @@ from django.db import transaction
 from django.dispatch import receiver
 from django.template.loader import get_template
 from django.urls import resolve, reverse
+from pretix.base.models import Event, Organizer
 from pretix.base.models.orders import Order, OrderPosition
 from pretix.base.services import tickets
-from pretix.base.signals import register_payment_providers, customer_created, order_paid, order_changed
-from pretix.control.signals import nav_organizer, item_forms
+from pretix.base.services.tasks import EventTask, OrganizerTask
+from pretix.base.signals import register_payment_providers, customer_created, order_placed, order_paid, order_changed, order_approved, order_modified
+from pretix.control.signals import nav_organizer, nav_event_settings, item_forms
 from pretix.presale.signals import order_info_top, position_info_top
 from pretix.celery_app import app
 from pretix_uic_barcode.signals import register_barcode_element_generators, register_vas_element_generators, generate_google_wallet_module, generate_apple_wallet_module
@@ -22,7 +24,7 @@ def register_payment_provider(sender, **kwargs):
 
 
 @receiver(nav_organizer, dispatch_uid="wallet_organav")
-def control_nav_orga_import(sender, request=None, **kwargs):
+def navbar_organizer_settings(sender, request=None, **kwargs):
     url = resolve(request.path_info)
     if not request.user.has_organizer_permission(request.organizer, "can_change_orders", request=request):
         return []
@@ -52,14 +54,77 @@ def control_nav_orga_import(sender, request=None, **kwargs):
     ]
 
 
+@receiver(nav_event_settings, dispatch_uid="wallet_eventnav")
+def navbar_event_settings(sender, request, **kwargs):
+    if not request.user.has_organizer_permission(request.organizer, "can_change_event_settings", request=request):
+        return []
+    if "pretix_wallet" not in request.organizer.plugins:
+        return []
+    url = resolve(request.path_info)
+    return [
+        {
+            "label": "Wallets",
+            "url": reverse(
+                "plugins:pretix_wallet:event_settings",
+                kwargs={
+                    "event": request.event.slug,
+                    "organizer": request.organizer.slug,
+                },
+            ),
+            "active": url.namespace == "plugins:pretix_wallet"
+                      and url.url_name.startswith("event_settings"),
+        }
+    ]
+
+def _customer_create_wallet(organizer, customer):
+    if organizer.settings.wallet_create_for_customers and not hasattr(customer, "wallet"):
+        for order in customer.orders.all():
+            if hasattr(order, "wallet"):
+                order.wallet.customer = customer
+                order.save()
+                return
+
+        models.Wallet.objects.create(
+            issuer=organizer,
+            customer=customer,
+            currency=organizer.settings.wallet_default_currency,
+        )
+
+def _order_create_wallet(event, order):
+    if event.settings.wallet_create_for_orders and not hasattr(order, "wallet"):
+        if order.customer and hasattr(order.customer, "wallet") and order.customer.wallet.currency == event.currency:
+            return
+
+        for op in order.positions.all():
+            if hasattr(op, "wallet"):
+                op.wallet.order = order
+                op.save()
+                return
+
+        models.Wallet.objects.create(
+            issuer=event.organizer,
+            order=order,
+            customer=order.customer,
+            currency=event.currency,
+        )
+
+    if order.customer and hasattr(order, "wallet") and not order.wallet.customer and not hasattr(order.customer, "wallet"):
+        order.wallet.customer = order.customer
+        order.wallet.save()
+
+
 @receiver(customer_created, dispatch_uid="wallet_customer_created")
 def customer_created(sender, customer, **kwargs):
-    if sender.settings.wallet_create_for_customers and not hasattr(customer, "wallet"):
-        models.Wallet.objects.create(
-            issuer=sender,
-            customer=customer,
-            currency=sender.settings.wallet_default_currency,
-        )
+    _customer_create_wallet(sender, customer)
+
+
+@receiver(order_placed, dispatch_uid="wallet_order_placed_create_wallet")
+@receiver(order_paid, dispatch_uid="wallet_order_paid_create_wallet")
+@receiver(order_changed, dispatch_uid="wallet_order_changed_create_wallet")
+@receiver(order_modified, dispatch_uid="wallet_order_modified_create_wallet")
+@receiver(order_approved, dispatch_uid="wallet_order_approved_create_wallet")
+def order_create_wallet(sender, order, **kwargs):
+    _order_create_wallet(sender, order)
 
 
 @receiver(order_info_top, dispatch_uid="wallet_show_balance")
@@ -70,6 +135,10 @@ def order_info_balance(sender, request, order, **kwargs):
 
     if hasattr(order.customer, "wallet"):
         wallets.append(order.customer.wallet)
+
+    if hasattr(order, "wallet"):
+        if order.wallet not in wallets:
+            wallets.append(order.wallet)
 
     for order_position in order.positions.all():
         if hasattr(order_position, "wallet"):
@@ -144,7 +213,7 @@ def order_issue_balance(sender, order, **kwargs):
                             wallet = models.Wallet.objects.create(
                                 issuer=sender.organizer,
                                 customer=order.customer,
-                                currency=sender.settings.wallet_default_currency,
+                                currency=sender.currency,
                             )
                             wallet.save()
                     else:
@@ -154,7 +223,7 @@ def order_issue_balance(sender, order, **kwargs):
                             wallet = models.Wallet.objects.create(
                                 issuer=sender.organizer,
                                 order_position=p,
-                                currency=sender.settings.wallet_default_currency,
+                                currency=sender.currency,
                             )
                             wallet.save()
 
@@ -203,4 +272,17 @@ def update_ticket_output(wallet_pk):
     if wallet.customer:
         for order in wallet.customer.orders.all():
             ticket_output.update_ticket_output_all.apply_async(kwargs={"event": order.event.pk, "order_pk": order.pk})
-        
+
+
+@app.task(base=OrganizerTask, acks_late=True)
+def create_wallets_for_customers(organizer: Organizer):
+    if organizer.settings.wallet_create_for_customers:
+        for customer in organizer.customers.all():
+            _customer_create_wallet(organizer, customer)
+
+
+@app.task(base=EventTask, acks_late=True)
+def create_wallets_for_orders(event: Event):
+    if event.settings.wallet_create_for_orders:
+        for order in event.orders.all():
+            _order_create_wallet(event, order)
