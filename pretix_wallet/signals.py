@@ -8,7 +8,7 @@ from pretix.base.models.orders import Order, OrderPosition
 from pretix.base.services import tickets
 from pretix.base.signals import register_payment_providers, customer_created, order_paid, order_changed
 from pretix.control.signals import nav_organizer, item_forms
-from pretix.presale.signals import order_info_top
+from pretix.presale.signals import order_info_top, position_info_top
 from pretix.celery_app import app
 from pretix_uic_barcode.signals import register_barcode_element_generators, register_vas_element_generators, generate_google_wallet_module, generate_apple_wallet_module
 from pretix_uic_barcode import ticket_output
@@ -75,6 +75,28 @@ def order_info_balance(sender, request, order, **kwargs):
         if hasattr(order_position, "wallet"):
             if order_position.wallet not in wallets:
                 wallets.append(order_position.wallet)
+
+    ctx = {
+        'order': order,
+        'request': request,
+        'event': sender,
+        'wallets': wallets,
+    }
+    return template.render(ctx, request=request)
+
+
+@receiver(position_info_top, dispatch_uid="wallet_show_balance_position")
+def position_info_balance(sender, request, order, position, **kwargs):
+    template = get_template("pretix_wallet/order/balance.html")
+
+    wallets = []
+
+    if hasattr(order.customer, "wallet"):
+        wallets.append(order.customer.wallet)
+
+    if hasattr(position, "wallet"):
+        if position.wallet not in wallets:
+            wallets.append(position.wallet)
 
     ctx = {
         'order': order,
