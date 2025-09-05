@@ -81,6 +81,7 @@ def order_info_balance(sender, request, order, **kwargs):
         'request': request,
         'event': sender,
         'wallets': wallets,
+        'order_page': True,
     }
     return template.render(ctx, request=request)
 
@@ -103,6 +104,7 @@ def position_info_balance(sender, request, order, position, **kwargs):
         'request': request,
         'event': sender,
         'wallets': wallets,
+        'order_page': False,
     }
     return template.render(ctx, request=request)
 

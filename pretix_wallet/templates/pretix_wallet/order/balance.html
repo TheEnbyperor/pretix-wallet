@@ -22,7 +22,9 @@
                         <tr>
                             <th>Time</th>
                             <th>Description</th>
-                            <th></th>
+                            {% if order_page %}
+                                <th></th>
+                            {% endif %}
                             <th>Amount</th>
                         </tr>
                         </thead>
@@ -32,15 +34,20 @@
                                 <tr>
                                     <td>{{ transaction.timestamp|date:"SHORT_DATETIME_FORMAT" }}</td>
                                     <td>{{ transaction.descriptor }}</td>
-                                    <td>
-                                        {% if transaction.order_position %}
-                                            <a href="{% eventurl event "presale:event.order" secret=transaction.order_position.order.secret order=transaction.order_position.order.code %}">View order</a>
-                                        {% elif transaction.order_payment %}
-                                            <a href="{% eventurl event "presale:event.order" secret=transaction.order_payment.order.secret order=transaction.order_payment.order.code %}">View order</a>
-                                        {% elif transaction.order_refund %}
-                                            <a href="{% eventurl event "presale:event.order" secret=transaction.order_refund.order.secret order=transaction.order_refund.order.code %}">View order</a>
-                                        {% endif %}
-                                    </td>
+                                    {% if order_page %}
+                                        <td>
+                                            {% if transaction.order_position %}
+                                                <a href="{% eventurl event "presale:event.order" secret=transaction.order_position.order.secret order=transaction.order_position.order.code %}">View
+                                                    order</a>
+                                            {% elif transaction.order_payment %}
+                                                <a href="{% eventurl event "presale:event.order" secret=transaction.order_payment.order.secret order=transaction.order_payment.order.code %}">View
+                                                    order</a>
+                                            {% elif transaction.order_refund %}
+                                                <a href="{% eventurl event "presale:event.order" secret=transaction.order_refund.order.secret order=transaction.order_refund.order.code %}">View
+                                                    order</a>
+                                            {% endif %}
+                                        </td>
+                                    {% endif %}
                                     <td>{{ transaction.value|money:wallet.currency }}</td>
                                 </tr>
                             {% endfor %}
