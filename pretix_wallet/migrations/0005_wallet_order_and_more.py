@@ -7,7 +7,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('pretixbase', '0289_alter_customer_locale_alter_user_locale'),
+        ("pretixbase", "0287_organizer_plugins"),
         ('pretix_wallet', '0004_plugin_level'),
     ]
 

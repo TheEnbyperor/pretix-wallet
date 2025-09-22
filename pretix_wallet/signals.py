@@ -8,14 +8,15 @@ from pretix.base.models import Event, Organizer
 from pretix.base.models.orders import Order, OrderPosition
 from pretix.base.services import tickets
 from pretix.base.services.tasks import EventTask, OrganizerTask
-from pretix.base.signals import register_payment_providers, customer_created, order_placed, order_paid, order_changed, order_approved, order_modified
+from pretix.base.signals import register_payment_providers, customer_created, order_placed, order_paid, order_changed, \
+    order_approved, order_modified, register_multievent_data_exporters
 from pretix.control.signals import nav_organizer, nav_event_settings, item_forms
 from pretix.presale.signals import order_info_top, position_info_top
 from pretix.celery_app import app
 from pretix_uic_barcode.signals import register_barcode_element_generators, register_vas_element_generators, generate_google_wallet_module, generate_apple_wallet_module
 from pretix_uic_barcode import ticket_output
 
-from . import payment, models, elements, forms
+from . import payment, models, elements, forms, exporters
 
 
 @receiver(register_payment_providers, dispatch_uid="payment_wallet")
@@ -263,6 +264,11 @@ def google_module_generator(sender, **kwargs):
 @receiver(generate_apple_wallet_module, dispatch_uid="wallet_apple_module_generator")
 def apple_module_generator(sender, **kwargs):
     return [elements.generate_apple_wallet_module]
+
+
+@receiver(register_multievent_data_exporters, dispatch_uid="exporter_wallets")
+def register_wallet_exporter(sender, **kwargs):
+    return exporters.WalletExporter
 
 
 @app.task(acks_late=True)
