@@ -19,7 +19,7 @@ class SettingsView(OrganizerDetailViewMixin, OrganizerPermissionRequiredMixin, F
     model = Organizer
     form_class = forms.WalletSettingsForm
     template_name = 'pretix_wallet/organizers/settings.html'
-    permission = 'can_change_organizer_settings'
+    permission = 'organizer.settings.general:write"'
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -54,7 +54,7 @@ class EventSettingsView(EventSettingsViewMixin, EventSettingsFormView):
     model = Event
     form_class = forms.WalletEventSettingsForm
     template_name = 'pretix_wallet/organizers/event_settings.html'
-    permission = "can_change_event_settings"
+    permission = "event.settings.general:write"
 
     def get_success_url(self) -> str:
         return reverse(
@@ -72,7 +72,7 @@ class EventSettingsView(EventSettingsViewMixin, EventSettingsFormView):
 class WalletListView(OrganizerDetailViewMixin, OrganizerPermissionRequiredMixin, ListView):
     model = models.Wallet
     template_name = 'pretix_wallet/organizers/wallets.html'
-    permission = 'can_change_orders'
+    permission = 'event.orders:write'
     context_object_name = 'wallets'
     paginate_by = 50
 
@@ -104,7 +104,7 @@ class WalletListView(OrganizerDetailViewMixin, OrganizerPermissionRequiredMixin,
 class WalletView(OrganizerPermissionRequiredMixin, DetailView):
     model = models.Wallet
     template_name = 'pretix_wallet/organizers/wallet.html'
-    permission = 'can_change_orders'
+    permission = 'event.orders:write'
     context_object_name = 'wallet'
     slug_url_kwarg = "pan"
     slug_field = "pan"
@@ -122,7 +122,7 @@ class WalletView(OrganizerPermissionRequiredMixin, DetailView):
 class WalletSettingsView(OrganizerPermissionRequiredMixin, DetailView):
     model = models.Wallet
     template_name = 'pretix_wallet/organizers/wallet_settings.html'
-    permission = 'can_change_organizer_settings'
+    permission = 'organizer.settings.general:write"'
     slug_url_kwarg = "pan"
     slug_field = "pan"
 
@@ -140,7 +140,7 @@ class WalletSettingsView(OrganizerPermissionRequiredMixin, DetailView):
             data=self.request.POST if self.request.method == "POST" else None,
             customers=self.request.organizer.settings.customer_accounts and (
                 self.request.user.has_organizer_permission(
-                    self.request.organizer, 'can_manage_customers', request=self.request
+                    self.request.organizer, 'organizer.customer:write', request=self.request
                 )
             ),
             initial={
@@ -173,7 +173,7 @@ class WalletSettingsView(OrganizerPermissionRequiredMixin, DetailView):
 
 class WalletManualChargeView(OrganizerPermissionRequiredMixin, DetailView):
     model = models.Wallet
-    permission = 'can_change_orders'
+    permission = 'event.orders:write'
     slug_url_kwarg = "pan"
     slug_field = "pan"
 

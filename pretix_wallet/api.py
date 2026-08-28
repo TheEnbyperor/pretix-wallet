@@ -57,7 +57,7 @@ class WalletSerializer(I18nAwareModelSerializer):
 class WalletViewSet(viewsets.ModelViewSet):
     serializer_class = WalletSerializer
     queryset = models.Wallet.objects.none()
-    permission = 'can_change_orders'
+    permission = 'event.orders:write'
 
     def get_queryset(self):
         return self.request.organizer.wallets.all()
